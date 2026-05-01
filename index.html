@@ -357,9 +357,17 @@ html.js [data-fade]  { opacity: 0; transform: translateY(20px); }
 .hero-nav {
   position: absolute;
   bottom: 2.5rem;
-  left: 0; right: 0;
-  display: flex; align-items: center; justify-content: center;
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 90%;
+  max-width: 1000px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 1.25rem;
+
   z-index: 5;
 }
 .arrow-btn {
@@ -376,19 +384,34 @@ html.js [data-fade]  { opacity: 0; transform: translateY(20px); }
 .arrow-btn:hover { background: var(--c-secondary); color: var(--c-white); }
 .arrow-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
-.progress-bars { display: flex; gap: 0.5rem; }
+.progress-bars {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
+}
 .progress-bar {
-  width: 36px; height: 3px;
+  position: relative;
+  flex: 1;
+  height: 7px;
   background: rgba(14, 4, 45, 0.25);
   border-radius: 999px;
-  transition: width var(--t-fast), background var(--t-fast);
+  overflow: hidden;
 }
-.progress-bar.is-active { background: var(--c-secondary); width: 64px; }
+
+.progress-fill {
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  background: var(--c-secondary);
+}
+
+.hero[data-theme="dark"] .progress-fill {
+  background: var(--c-white);
+}
 
 .hero[data-theme="dark"] .arrow-btn { color: var(--c-white); border-color: var(--c-white); background: rgba(255,255,255,0.12); }
 .hero[data-theme="dark"] .arrow-btn:hover { background: var(--c-white); color: var(--c-secondary); }
 .hero[data-theme="dark"] .progress-bar { background: rgba(255,255,255,0.3); }
-.hero[data-theme="dark"] .progress-bar.is-active { background: var(--c-white); }
 
 
 /* ============================================================================
@@ -537,6 +560,7 @@ html.js [data-fade]  { opacity: 0; transform: translateY(20px); }
   .about__inner { grid-template-columns: 1fr; }
   .footer__inner { grid-template-columns: 1fr; }
   .article-card { flex: 0 0 240px; }
+	.hero-nav { width: 90%; }
 }
 
 @media (hover: none) {
@@ -637,11 +661,19 @@ html.js [data-fade]  { opacity: 0; transform: translateY(20px); }
   <div class="hero-nav">
     <button class="arrow-btn" id="hero-prev" aria-label="Previous slide">←</button>
     <div class="progress-bars" id="progress-bars">
-      <button class="progress-bar is-active" data-target-slide="0" aria-label="Go to slide 1"></button>
-      <button class="progress-bar"           data-target-slide="1" aria-label="Go to slide 2"></button>
-      <button class="progress-bar"           data-target-slide="2" aria-label="Go to slide 3"></button>
-      <button class="progress-bar"           data-target-slide="3" aria-label="Go to slide 4"></button>
-    </div>
+  <button class="progress-bar is-active" data-target-slide="0">
+    <span class="progress-fill"></span>
+  </button>
+  <button class="progress-bar" data-target-slide="1">
+    <span class="progress-fill"></span>
+  </button>
+  <button class="progress-bar" data-target-slide="2">
+    <span class="progress-fill"></span>
+  </button>
+  <button class="progress-bar" data-target-slide="3">
+    <span class="progress-fill"></span>
+  </button>
+</div>
     <button class="arrow-btn" id="hero-next" aria-label="Next slide">→</button>
   </div>
 </header>
@@ -1173,8 +1205,10 @@ const movingNext = index === from + 1 || (from === totalSlides - 1 && index === 
   isHeroAnimating = true;
   activeSlide = to;
 
-  syncHeroState();
+syncHeroState();
+animateProgressBar(activeSlide);
 
+	
 const newIncomingSideCard = movingNext
   ? getNextSlide(to)
   : getPrevSlide(to);
@@ -1209,7 +1243,7 @@ gsap.delayedCall(0.75, () => {
     }, 750);
   }
 }
-
+	
 
 /* Pre-hide hero slide 0 content synchronously, so there's no flash of
    visible content between page paint and the reveal animation starting. */
@@ -1239,6 +1273,7 @@ heroSlides.forEach((slide, i) => {
 
 /* Only position active instantly */
 layoutHeroCards(activeSlide, false);
+
 
 /* Animate side cards AFTER main reveal */
 function animateSideCardsIn() {
@@ -1320,6 +1355,11 @@ gsap.to('#hero-bg-fade', {
 /* Arrow buttons */
 heroPrev.addEventListener('click', () => goToSlide(activeSlide - 1));
 heroNext.addEventListener('click', () => goToSlide(activeSlide + 1));
+	
+/* Reset autoplay after user interaction */
+heroPrev.addEventListener('click', resetAutoPlay);
+heroNext.addEventListener('click', resetAutoPlay);
+heroTrack.addEventListener('pointerup', resetAutoPlay);
 
 /* Progress bar buttons */
 heroBars.forEach((bar) => {
@@ -1369,7 +1409,40 @@ if (dragDelta < -threshold) {
 
   dragDelta = 0;
 }
+/* ============================================================================
+   HERO AUTOPLAY
+   Automatically moves to the next slide every 10 seconds.
+   Manual clicks/swipes reset the 10-second timer.
+============================================================================ */
+let autoPlayInterval = null;
 
+function startAutoPlay() {
+  stopAutoPlay();
+
+  autoPlayInterval = setInterval(() => {
+    if (!isHeroAnimating && !isDragging) {
+      goToSlide(activeSlide + 1);
+    }
+  }, 6500);
+}
+
+function stopAutoPlay() {
+  if (autoPlayInterval) {
+    clearInterval(autoPlayInterval);
+    autoPlayInterval = null;
+  }
+}
+
+function resetAutoPlay() {
+  stopAutoPlay();
+  startAutoPlay();
+  animateProgressBar(activeSlide);
+}
+	
+/* Start autoplay after the autoplay functions exist */
+startAutoPlay();	
+animateProgressBar(activeSlide);	
+	
 heroTrack.addEventListener('pointerup', endDrag);
 heroTrack.addEventListener('pointercancel', endDrag);
 
@@ -1378,6 +1451,28 @@ window.addEventListener('resize', () => {
   const activeCard = heroSlides[activeSlide].querySelector('.slide__card');
 setCardState(activeCard, getCardState(activeSlide, activeSlide), false);
 });
+	
+function animateProgressBar(index) {
+  if (!hasGSAP) return;
+
+  const fills = document.querySelectorAll('.progress-fill');
+
+  // Reset all bars
+  fills.forEach(fill => {
+    gsap.killTweensOf(fill);
+    gsap.set(fill, { width: '0%' });
+  });
+
+  // Animate active bar
+  const activeFill = fills[index];
+  if (!activeFill) return;
+
+  gsap.to(activeFill, {
+    width: '100%',
+    duration: 6.5,
+    ease: 'none'
+  });
+}	
 
 /* ----- 3D mouse-tilt on the active slide's card --------------------------- */
 heroTrack.addEventListener('mousemove', (e) => {

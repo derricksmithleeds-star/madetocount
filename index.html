@@ -195,8 +195,17 @@ html.js [data-fade]  { opacity: 0; transform: translateY(20px); }
 .hero__bg.bg--navy   { background: var(--c-secondary); }
 
 .hero__bg-fade {
-  position: absolute; inset: 0;
-  background: var(--c-white);
+  position: absolute;
+  inset: 0;
+
+  background: linear-gradient(
+    to top,
+    var(--c-white) 0%,
+    rgba(255,255,255,0.85) 25%,
+    rgba(255,255,255,0.4) 55%,
+    rgba(255,255,255,0) 100%
+  );
+
   opacity: 0;
   pointer-events: none;
   z-index: 2;
@@ -228,7 +237,7 @@ html.js [data-fade]  { opacity: 0; transform: translateY(20px); }
   z-index: 2;
 }
 .hero-track {
-  display: flex;
+  position: relative;
   width: 100%; height: 100%;
   transition: none;
   will-change: transform;
@@ -238,13 +247,27 @@ html.js [data-fade]  { opacity: 0; transform: translateY(20px); }
 .hero-track:active { cursor: grabbing; }
 
 .slide {
-  flex: 0 0 100%;
-  width: 100%; height: 100%;
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 6rem var(--gutter) 9rem;
+}
+
+.slide:not(.is-active) .slide__title,
+.slide:not(.is-active) .slide__copy,
+.slide:not(.is-active) .slide__shape {
+  opacity: 0 !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.slide.is-active .slide__title,
+.slide.is-active .slide__copy,
+.slide.is-active .slide__shape {
+  opacity: 1;
+  visibility: visible;
 }
 .slide__inner {
   position: relative;
@@ -274,29 +297,47 @@ html.js [data-fade]  { opacity: 0; transform: translateY(20px); }
 .slide__card.is-yellow { background: var(--c-yellow); }
 .slide__card.is-navy   { background: var(--c-secondary); }
 .slide__card.is-white  { background: var(--c-white); border: 1px solid var(--c-grey-mid); }
+	.hero.hero--loading .slide:not(.is-active) .slide__card {
+  opacity: 0 !important;
+}
 
 .slide__shape {
   position: absolute;
-  border-radius: 50%;
   z-index: 1;
   pointer-events: none;
+  border: 1px dashed rgba(14, 4, 45, 0.35);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(14, 4, 45, 0.55);
+  backdrop-filter: blur(4px);
 }
 .slide__shape.shape--1 {
-  width: 80px; height: 80px;
-  top: 20%; left: 8%;
-  background: var(--c-yellow);
+  width: 120px;
+  height: 120px;
+  top: 16%;
+  left: 12%;
 }
+
 .slide__shape.shape--2 {
-  width: 110px; height: 110px;
-  bottom: 30%; right: 8%;
-  background: var(--c-mint);
-  border-radius: 18px;
-  transform: rotate(15deg);
+  width: 150px;
+  height: 110px;
+  bottom: 24%;
+  right: 10%;
+  transform: rotate(10deg);
 }
+
 .slide__shape.shape--3 {
-  width: 60px; height: 60px;
-  top: 12%; right: 18%;
-  background: var(--c-primary);
+  width: 90px;
+  height: 90px;
+  top: 18%;
+  right: 20%;
+  transform: rotate(-8deg);
 }
 
 .slide__title {
@@ -520,7 +561,7 @@ html.js [data-fade]  { opacity: 0; transform: translateY(20px); }
   <a class="nav__cta" href="#cta">Get in touch</a>
 </nav>
 
-<header class="hero" id="hero" data-theme="light">
+<header class="hero hero--loading" id="hero" data-theme="light">
   <div class="hero__bg-stack">
     <div class="hero__bg bg--red    is-active" data-bg-index="0"></div>
     <div class="hero__bg bg--mint              " data-bg-index="1"></div>
@@ -581,7 +622,7 @@ html.js [data-fade]  { opacity: 0; transform: translateY(20px); }
         <div class="slide__shape shape--2" style="background: var(--c-yellow);"></div>
         <div class="slide__shape shape--3" style="background: var(--c-primary);"></div>
         <div class="slide__inner">
-          <div class="slide__card is-white"></div>
+          <div class="slide__card" style="background: purple;"></div>
           <h1 class="slide__title" data-split>Nemo enim ipsam voluptatem quia voluptas.</h1>
           <p class="slide__copy">
             At vero eos et accusamus et iusto odio dignissimos ducimus qui
@@ -886,46 +927,25 @@ const heroNext   = document.getElementById('hero-next');
 const heroBgs    = document.querySelectorAll('.hero__bg-stack .hero__bg');
 
 const totalSlides = originalHeroSlides.length;
-let activeSlide = 0;       // real index: 0,1,2,3
-let visualIndex = 2;       // visual index: clones are 0-1, real slides are 2-5, clones are 6-7
+let activeSlide = 0;
 let isDragging  = false;
 let dragStartX  = 0;
 let dragDelta   = 0;
 let isHeroAnimating = false;
 
-/* Create enough clones for seamless infinite movement WITH peeking cards:
-   [clone 3] [clone 4] [slide 1] [slide 2] [slide 3] [slide 4] [clone 1] [clone 2] */
-const cloneBeforeA = originalHeroSlides[totalSlides - 2].cloneNode(true);
-const cloneBeforeB = originalHeroSlides[totalSlides - 1].cloneNode(true);
-const cloneAfterA  = originalHeroSlides[0].cloneNode(true);
-const cloneAfterB  = originalHeroSlides[1].cloneNode(true);
+/* NO CLONES — true virtual carousel */
+const heroSlides = originalHeroSlides;
 
-[cloneBeforeA, cloneBeforeB, cloneAfterA, cloneAfterB].forEach((clone) => {
-  clone.setAttribute('aria-hidden', 'true');
-  clone.classList.add('is-clone');
-});
-
-heroTrack.insertBefore(cloneBeforeB, originalHeroSlides[0]);
-heroTrack.insertBefore(cloneBeforeA, cloneBeforeB);
-heroTrack.appendChild(cloneAfterA);
-heroTrack.appendChild(cloneAfterB);
-
-const heroSlides = Array.from(heroTrack.querySelectorAll('.slide'));
-
-function realIndexFromVisual(index) {
-  return (index - 2 + totalSlides) % totalSlides;
+function wrapIndex(index) {
+  return (index + totalSlides) % totalSlides;
 }
 
-function visualIndexFromReal(index) {
-  return index + 2;
+function getPrevSlide(index) {
+  return wrapIndex(index - 1);
 }
 
-function getPrevVisual(index) {
-  return index - 1;
-}
-
-function getNextVisual(index) {
-  return index + 1;
+function getNextSlide(index) {
+  return wrapIndex(index + 1);
 }
 
 function setHeroBg(index) {
@@ -940,41 +960,21 @@ function updateArrowState() {
   heroNext.disabled = false;
 }
 
-function setTrackToVisual(index, animate = false) {
-  const x = -index * heroTrack.clientWidth;
 
-  heroTrack.style.transition = 'none';
-
-  if (hasGSAP) {
-    gsap.killTweensOf(heroTrack);
-
-    if (animate) {
-      gsap.to(heroTrack, {
-        x,
-        duration: 0.75,
-        ease: 'power3.inOut',
-        overwrite: true
-      });
-    } else {
-      gsap.set(heroTrack, { x });
-    }
-  } else {
-    heroTrack.style.transform = `translateX(${x}px)`;
-  }
-}
-
-function getCardState(slideVisualIndex, currentVisualIndex) {
+function getCardState(slideIndex, currentIndex) {
   const w = heroTrack.clientWidth;
+  const prev = getPrevSlide(currentIndex);
+  const next = getNextSlide(currentIndex);
 
-  if (slideVisualIndex === currentVisualIndex) {
+  if (slideIndex === currentIndex) {
     return { x: 0, scale: 1, opacity: 1, z: 4 };
   }
 
-  if (slideVisualIndex === getNextVisual(currentVisualIndex)) {
+  if (slideIndex === prev) {
     return { x: -w / 2, scale: 0.4, opacity: 1, z: 3 };
   }
 
-  if (slideVisualIndex === getPrevVisual(currentVisualIndex)) {
+  if (slideIndex === next) {
     return { x: w / 2, scale: 0.4, opacity: 1, z: 3 };
   }
 
@@ -988,6 +988,22 @@ function setCardState(card, state, animate = false) {
   card.style.pointerEvents = state.z === 4 ? 'auto' : 'none';
 
   if (hasGSAP) {
+
+    if (state.opacity === 0) {
+      gsap.set(card, {
+        x: state.x,
+        y: 0,
+        scale: state.scale,
+        opacity: 0,
+        rotateX: 0,
+        rotateY: 0
+      });
+      return;
+    }
+
+    const isActive = state.z === 4;
+    const isPeeking = state.z === 3;
+
     gsap.to(card, {
       x: state.x,
       y: 0,
@@ -995,21 +1011,24 @@ function setCardState(card, state, animate = false) {
       opacity: state.opacity,
       rotateX: 0,
       rotateY: 0,
-      duration: animate ? 0.75 : 0,
-      ease: 'power3.inOut',
-      overwrite: 'auto'
+      duration: animate
+        ? (isPeeking ? 0.6 : 0.75)
+        : 0,
+      ease: isPeeking
+        ? 'power2.out'     // softer, more natural fade
+        : 'power3.inOut',  // keep main card premium
+      overwrite: true
     });
+
   } else {
     card.style.opacity = state.opacity;
     card.style.transform = `translateX(${state.x}px) scale(${state.scale})`;
   }
 }
-
-function layoutHeroCards(currentVisualIndex, animate = false, options = {}) {
+function layoutHeroCards(currentIndex, animate = false) {
   heroSlides.forEach((slide, i) => {
-    if (options.skipActive && i === currentVisualIndex) return;
     const card = slide.querySelector('.slide__card');
-    setCardState(card, getCardState(i, currentVisualIndex), animate);
+    setCardState(card, getCardState(i, currentIndex), animate);
   });
 }
 
@@ -1018,9 +1037,9 @@ function layoutHeroCardsForDrag(deltaX) {
   const progress = Math.min(1, Math.abs(deltaX) / w);
   const movingNext = deltaX < 0;
 
-  const current = visualIndex;
-  const target = movingNext ? getNextVisual(current) : getPrevVisual(current);
-  const otherSide = movingNext ? getPrevVisual(current) : getNextVisual(current);
+  const current = activeSlide;
+  const target = movingNext ? getNextSlide(current) : getPrevSlide(current);
+  const opposite = movingNext ? getPrevSlide(current) : getNextSlide(current);
 
   heroSlides.forEach((slide, i) => {
     const card = slide.querySelector('.slide__card');
@@ -1028,16 +1047,36 @@ function layoutHeroCardsForDrag(deltaX) {
 
     if (i === current) {
       state = movingNext
-        ? { x: gsap.utils.interpolate(0, w / 2, progress), scale: gsap.utils.interpolate(1, 0.4, progress), opacity: 1, z: 4 }
-        : { x: gsap.utils.interpolate(0, -w / 2, progress), scale: gsap.utils.interpolate(1, 0.4, progress), opacity: 1, z: 4 };
+        ? {
+            x: gsap.utils.interpolate(0, -w / 2, progress),
+            scale: gsap.utils.interpolate(1, 0.4, progress),
+            opacity: 1,
+            z: 4
+          }
+        : {
+            x: gsap.utils.interpolate(0, w / 2, progress),
+            scale: gsap.utils.interpolate(1, 0.4, progress),
+            opacity: 1,
+            z: 4
+          };
     } else if (i === target) {
       state = movingNext
-        ? { x: gsap.utils.interpolate(-w / 2, 0, progress), scale: gsap.utils.interpolate(0.4, 1, progress), opacity: 1, z: 4 }
-        : { x: gsap.utils.interpolate(w / 2, 0, progress), scale: gsap.utils.interpolate(0.4, 1, progress), opacity: 1, z: 4 };
-    } else if (i === otherSide) {
+        ? {
+            x: gsap.utils.interpolate(w / 2, 0, progress),
+            scale: gsap.utils.interpolate(0.4, 1, progress),
+            opacity: 1,
+            z: 4
+          }
+        : {
+            x: gsap.utils.interpolate(-w / 2, 0, progress),
+            scale: gsap.utils.interpolate(0.4, 1, progress),
+            opacity: 1,
+            z: 4
+          };
+    } else if (i === opposite) {
       state = movingNext
-        ? { x: w / 2, scale: 0.4, opacity: 1, z: 3 }
-        : { x: -w / 2, scale: 0.4, opacity: 1, z: 3 };
+        ? { x: -w / 2, scale: 0.4, opacity: 1, z: 3 }
+        : { x: w / 2, scale: 0.4, opacity: 1, z: 3 };
     }
 
     setCardState(card, state, false);
@@ -1057,7 +1096,7 @@ function revealSlide(slide, options = {}) {
   if (titleChars.length) gsap.set(titleChars, { yPercent: 110, opacity: 0 });
   if (animateCard) gsap.set(card, { opacity: 0, scale: 0.85, y: 30, x: 0 });
   gsap.set(copy,   { opacity: 0, y: 20 });
-  gsap.set(shapes, { opacity: 0, scale: 0 });
+gsap.set(shapes, { opacity: 0, scale: 0.6 });
 
   const tl = gsap.timeline();
 
@@ -1108,94 +1147,69 @@ function forceSlideContentVisible(slide) {
   gsap.set(copy, { opacity: 1, y: 0 });
   gsap.set(shapes, { opacity: 1, scale: 1 });
 }
-function syncRealStateFromVisual() {
-  activeSlide = realIndexFromVisual(visualIndex);
+function syncHeroState() {
+  heroSlides.forEach((slide, i) => {
+    slide.classList.toggle('is-active', i === activeSlide);
+  });
 
   setHeroBg(activeSlide);
   heroBars.forEach((b, i) => b.classList.toggle('is-active', i === activeSlide));
   updateArrowState();
 }
 
-function normaliseInfinitePosition() {
-  if (visualIndex <= 1) {
-    activeSlide = realIndexFromVisual(visualIndex);
-    visualIndex = visualIndex + totalSlides;
 
-    forceSlideContentVisible(heroSlides[visualIndex]);
-    setTrackToVisual(visualIndex, false);
-    layoutHeroCards(visualIndex, false);
-    return;
-  }
-
-  if (visualIndex >= totalSlides + 2) {
-    activeSlide = realIndexFromVisual(visualIndex);
-    visualIndex = visualIndex - totalSlides;
-
-    forceSlideContentVisible(heroSlides[visualIndex]);
-    setTrackToVisual(visualIndex, false);
-    layoutHeroCards(visualIndex, false);
-    return;
-  }
-
-  activeSlide = realIndexFromVisual(visualIndex);
-  layoutHeroCards(visualIndex, false);
-}
-
-function goToVisualSlide(targetVisualIndex) {
+function goToSlide(index) {
   if (isHeroAnimating) return;
 
-  isHeroAnimating = true;
-  visualIndex = targetVisualIndex;
+  const from = activeSlide;
+  const to = wrapIndex(index);
+  if (to === from) return;
 
-  syncRealStateFromVisual();
-  layoutHeroCards(visualIndex, true);
-if (visualIndex >= 2 && visualIndex <= totalSlides + 1) {
-  revealSlide(heroSlides[visualIndex], { animateCard: false });
-} else {
-  forceSlideContentVisible(heroSlides[visualIndex]);
-}
+  const w = heroTrack.clientWidth;
+
+const movingNext = index === from + 1 || (from === totalSlides - 1 && index === totalSlides);
+
+
+  isHeroAnimating = true;
+  activeSlide = to;
+
+  syncHeroState();
+
+const newIncomingSideCard = movingNext
+  ? getNextSlide(to)
+  : getPrevSlide(to);
+
+heroSlides.forEach((slide, i) => {
+  const card = slide.querySelector('.slide__card');
+  let state = getCardState(i, to);
+
+  if (i === newIncomingSideCard) {
+    state = { x: movingNext ? w : -w, scale: 0.4, opacity: 0, z: 1 };
+  }
+
+  setCardState(card, state, true);
+});
+  revealSlide(heroSlides[activeSlide], { animateCard: false });
 
   if (hasGSAP) {
-    heroTrack.style.transition = 'none';
+gsap.delayedCall(0.35, () => {
+  const peekCard = heroSlides[newIncomingSideCard].querySelector('.slide__card');
+  const peekState = getCardState(newIncomingSideCard, activeSlide);
 
-gsap.killTweensOf(heroTrack);
+  setCardState(peekCard, peekState, true);
+});
 
-gsap.to(heroTrack, {
-  x: -visualIndex * heroTrack.clientWidth,
-  duration: 0.75,
-  ease: 'power3.inOut',
-  overwrite: true,
-  onComplete: () => {
-    requestAnimationFrame(() => {
-      normaliseInfinitePosition();
-      isHeroAnimating = false;
-    });
-  }
+gsap.delayedCall(0.75, () => {
+  isHeroAnimating = false;
 });
   } else {
-    heroTrack.style.transition = '';
-    heroTrack.style.transform = `translateX(${-visualIndex * heroTrack.clientWidth}px)`;
-
     setTimeout(() => {
-      normaliseInfinitePosition();
+      layoutHeroCards(activeSlide, false);
       isHeroAnimating = false;
     }, 750);
   }
 }
 
-function goToSlide(index) {
-  if (index < 0) {
-    goToVisualSlide(visualIndex - 1);
-    return;
-  }
-
-  if (index > totalSlides - 1) {
-    goToVisualSlide(visualIndex + 1);
-    return;
-  }
-
-  goToVisualSlide(visualIndexFromReal(index));
-}
 
 /* Pre-hide hero slide 0 content synchronously, so there's no flash of
    visible content between page paint and the reveal animation starting. */
@@ -1208,14 +1222,57 @@ if (hasGSAP) {
 }
 
 /* Initial bg + reveal. */
-setHeroBg(0);
-setTrackToVisual(visualIndex, false);
-layoutHeroCards(visualIndex, false, { skipActive: true });
-updateArrowState();
+syncHeroState();
 
+/* Hide side cards initially */
+heroSlides.forEach((slide, i) => {
+  const card = slide.querySelector('.slide__card');
+
+  if (i !== activeSlide) {
+    if (hasGSAP) {
+      gsap.set(card, { opacity: 0 });
+    } else {
+      card.style.opacity = 0;
+    }
+  }
+});
+
+/* Only position active instantly */
+layoutHeroCards(activeSlide, false);
+
+/* Animate side cards AFTER main reveal */
+function animateSideCardsIn() {
+  const w = heroTrack.clientWidth;
+
+  const prev = getPrevSlide(activeSlide);
+  const next = getNextSlide(activeSlide);
+
+  const prevCard = heroSlides[prev].querySelector('.slide__card');
+  const nextCard = heroSlides[next].querySelector('.slide__card');
+
+  if (!hasGSAP) {
+    layoutHeroCards(activeSlide, true);
+    return;
+  }
+
+  gsap.fromTo(prevCard,
+    { x: -w, scale: 0.4, opacity: 0 },
+    { x: -w / 2, scale: 0.4, opacity: 1, duration: 0.7, ease: 'power3.out' }
+  );
+
+  gsap.fromTo(nextCard,
+    { x: w, scale: 0.4, opacity: 0 },
+    { x: w / 2, scale: 0.4, opacity: 1, duration: 0.7, ease: 'power3.out' }
+  );
+}
 if (hasGSAP) {
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    revealSlide(originalHeroSlides[0]);
+revealSlide(heroSlides[activeSlide]);
+
+gsap.delayedCall(1.55, () => {
+  hero.classList.remove('hero--loading');
+  animateSideCardsIn();
+});
   }));
 }
 
@@ -1230,23 +1287,35 @@ setTimeout(() => {
     gsap.set(card, { opacity: 1, scale: 1, y: 0, x: 0 });
     gsap.set(s.querySelector('.slide__copy'), { opacity: 1, y: 0 });
     gsap.set(s.querySelectorAll('.slide__shape'), { opacity: 1, scale: 1 });
-    layoutHeroCards(visualIndex, false, { skipActive: true });
+    layoutHeroCards(activeSlide, false, { skipActive: true });
   }
 }, 3000);
 
 /* Scroll-driven white fade */
 if (hasST) {
-  gsap.to('#hero-bg-fade', {
-    opacity: 1,
-    ease: 'none',
-    scrollTrigger: {
-      trigger: '.hero',
-      start:   'top top',
-      end:     'bottom top',
-      scrub:   true
-    }
-  });
+gsap.to('#hero-bg-fade', {
+  opacity: 1,
+  ease: 'none',
+  scrollTrigger: {
+    trigger: '.hero',
+    start: 'top top',
+    end: '7% top',
+    scrub: 0.6
+  }
+});
 }
+	
+	gsap.to('.hero-stage, .hero-nav, .hero__wordmark', {
+  y: -120,
+  opacity: 0,
+  ease: 'none',
+  scrollTrigger: {
+    trigger: '.hero',
+    start: 'top top',
+    end: '40% top',
+    scrub: true
+  }
+});
 
 /* Arrow buttons */
 heroPrev.addEventListener('click', () => goToSlide(activeSlide - 1));
@@ -1280,14 +1349,7 @@ heroTrack.addEventListener('pointermove', (e) => {
 
   dragDelta = e.clientX - dragStartX;
 
-  if (hasGSAP) {
-    gsap.set(heroTrack, { x: -visualIndex * heroTrack.clientWidth + dragDelta });
-  } else {
-    heroTrack.style.transition = 'none';
-    heroTrack.style.transform = `translateX(${-visualIndex * heroTrack.clientWidth + dragDelta}px)`;
-  }
-
-  layoutHeroCardsForDrag(dragDelta);
+layoutHeroCardsForDrag(dragDelta);
 });
 
 function endDrag() {
@@ -1297,14 +1359,13 @@ function endDrag() {
 
   const threshold = heroTrack.clientWidth * 0.12;
 
-  if (dragDelta < -threshold) {
-    goToVisualSlide(visualIndex + 1);
-  } else if (dragDelta > threshold) {
-    goToVisualSlide(visualIndex - 1);
-  } else {
-    setTrackToVisual(visualIndex, true);
-    layoutHeroCards(visualIndex, true);
-  }
+if (dragDelta < -threshold) {
+  goToSlide(activeSlide + 1);
+} else if (dragDelta > threshold) {
+  goToSlide(activeSlide - 1);
+} else {
+  layoutHeroCards(activeSlide, true);
+}
 
   dragDelta = 0;
 }
@@ -1314,14 +1375,14 @@ heroTrack.addEventListener('pointercancel', endDrag);
 
 /* Re-snap to active slide on resize so transform stays correct */
 window.addEventListener('resize', () => {
-  setTrackToVisual(visualIndex, false);
-  layoutHeroCards(visualIndex, false);
+  const activeCard = heroSlides[activeSlide].querySelector('.slide__card');
+setCardState(activeCard, getCardState(activeSlide, activeSlide), false);
 });
 
 /* ----- 3D mouse-tilt on the active slide's card --------------------------- */
 heroTrack.addEventListener('mousemove', (e) => {
-  const activeVisualSlide = heroSlides[visualIndex];
-  const card = activeVisualSlide ? activeVisualSlide.querySelector('.slide__card') : null;
+const activeVisualSlide = heroSlides[activeSlide];
+const card = activeVisualSlide ? activeVisualSlide.querySelector('.slide__card') : null;
 
   if (!card || isHeroAnimating || isDragging || !hasGSAP) return;
 
@@ -1342,8 +1403,8 @@ heroTrack.addEventListener('mousemove', (e) => {
 });
 
 heroTrack.addEventListener('mouseleave', () => {
-  const activeVisualSlide = heroSlides[visualIndex];
-  const card = activeVisualSlide ? activeVisualSlide.querySelector('.slide__card') : null;
+const activeVisualSlide = heroSlides[activeSlide];
+const card = activeVisualSlide ? activeVisualSlide.querySelector('.slide__card') : null;
 
   if (card && hasGSAP) {
     gsap.to(card, {
@@ -1355,7 +1416,79 @@ heroTrack.addEventListener('mouseleave', () => {
     });
   }
 });
+	
+/* ============================================================================
+   RANDOMISE SHAPE POSITIONS
+   Makes each decorative shape feel organically placed (not grid-like)
+============================================================================ */
+function randomiseShapes() {
+  const slides = document.querySelectorAll('.slide');
 
+  const safePositions = [
+    { top: 14, left: 10 },
+    { top: 18, left: 76 },
+    { top: 62, left: 12 },
+    { top: 66, left: 74 },
+    { top: 36, left: 6 },
+    { top: 38, left: 82 }
+  ];
+
+  slides.forEach((slide) => {
+    const shapes = slide.querySelectorAll('.slide__shape');
+
+    shapes.forEach((shape, i) => {
+      const base = safePositions[i % safePositions.length];
+
+      const jitterX = (Math.random() - 0.5) * 8;
+      const jitterY = (Math.random() - 0.5) * 8;
+      const rotate = (Math.random() - 0.5) * 24;
+      const scale = Math.random() * 0.25 + 0.9;
+
+      shape.style.top = `${base.top + jitterY}%`;
+      shape.style.left = `${base.left + jitterX}%`;
+      shape.style.right = 'auto';
+      shape.style.bottom = 'auto';
+      shape.style.transform = `rotate(${rotate}deg) scale(${scale})`;
+    });
+  });
+}
+/* ============================================================================
+   FLOATING SHAPE ANIMATION (natural, varied motion)
+============================================================================ */
+function animateFloatingShapes() {
+  if (!hasGSAP) return;
+
+  document.querySelectorAll('.slide__shape').forEach((shape) => {
+
+    // Random movement range
+    const moveX = (Math.random() - 0.5) * 40; // -20 → +20px
+    const moveY = (Math.random() - 0.5) * 40;
+
+    // Random rotation drift
+    const rotate = (Math.random() - 0.5) * 20;
+
+    // Random duration (slower = more premium)
+    const duration = Math.random() * 3 + 4; // 4 → 7s
+
+    // Random delay so nothing starts together
+    const delay = Math.random() * 2;
+
+    gsap.to(shape, {
+      x: `+=${moveX}`,
+      y: `+=${moveY}`,
+      rotation: `+=${rotate}`,
+      duration: duration,
+      ease: 'sine.inOut',
+      repeat: -1,
+      yoyo: true,
+      delay: delay
+    });
+  });
+}
+	/* Run once on page load */
+randomiseShapes();
+animateFloatingShapes();
+	
 /* ============================================================================
    JOURNAL CAROUSEL
 ============================================================================ */
